@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gottesdienst Video Cutter - KI-gestützter Predigtschnitt</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #f1f5f9; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between">
+
+    <header class="border-b border-slate-800 glass-panel sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-sky-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <i class="fa-solid font-bold text-white text-xl fa-cross"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight text-white">Gottesdienst Video Cutter</h1>
+                    <p class="text-xs text-slate-400">High-Speed Lokaler Predigtschnitt</p>
+                </div>
+            </div>
+            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Bereit
+            </span>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+        <!-- Section 1: Upload -->
+        <section class="glass-panel rounded-2xl p-6 shadow-xl space-y-6">
+            <div>
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fa-solid fa-cloud-arrow-up text-indigo-400"></i>
+                    1. Video, Medien & KI-Hinweise
+                </h2>
+                <p class="text-sm text-slate-400">Wähle das Predigtvideo, optionale Intros/Outros und gib bei Bedarf Kontext mit.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 space-y-4">
+                    <div id="video-dropzone" onclick="document.getElementById('video-input').click()" 
+                         class="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-8 text-center bg-slate-900/40 cursor-pointer transition flex flex-col items-center justify-center min-h-[200px]">
+                        <input type="file" id="video-input" accept="video/*" class="hidden" onchange="handleVideoSelect(event)">
+                        <div id="dropzone-prompt" class="space-y-3">
+                            <div class="w-16 h-16 rounded-full bg-slate-800 text-indigo-400 flex items-center justify-center mx-auto">
+                                <i class="fa-solid fa-video text-2xl"></i>
+                            </div>
+                            <p class="text-base font-semibold text-slate-200">Predigtvideo hierher ziehen oder <span class="text-indigo-400 hover:underline">durchsuchen</span></p>
+                        </div>
+                        <div id="selected-video-info" class="hidden w-full flex items-center justify-between bg-slate-800 p-4 rounded-lg border border-slate-700">
+                            <p id="video-filename" class="text-sm font-semibold text-slate-200 truncate">Predigt.mp4</p>
+                            <button onclick="event.stopPropagation(); removeVideo();" class="text-slate-400 hover:text-red-400"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div onclick="document.getElementById('intro-input').click()" class="border border-dashed border-slate-700 rounded-xl p-3 bg-slate-900/30 cursor-pointer flex items-center gap-3">
+                            <input type="file" id="intro-input" accept="video/*" class="hidden" onchange="handleIntroSelect(event)">
+                            <i class="fa-solid fa-play text-slate-400"></i>
+                            <span id="intro-label" class="text-xs text-slate-300 truncate">Intro Video (optional)</span>
+                        </div>
+                        <div onclick="document.getElementById('outro-input').click()" class="border border-dashed border-slate-700 rounded-xl p-3 bg-slate-900/30 cursor-pointer flex items-center gap-3">
+                            <input type="file" id="outro-input" accept="video/*" class="hidden" onchange="handleOutroSelect(event)">
+                            <i class="fa-solid fa-flag-checkered text-slate-400"></i>
+                            <span id="outro-label" class="text-xs text-slate-300 truncate">Outro Video (optional)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-4 flex flex-col justify-between">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-300 mb-2">KI-Kontext (optional)</label>
+                        <textarea id="ai-prompt-input" rows="4" placeholder="Z. B. Englischer Prediger mit deutscher Übersetzung..." class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+                    </div>
+                    <button id="start-analysis-btn" onclick="startAIAnalysis()" disabled class="w-full py-3.5 bg-indigo-600 disabled:bg-slate-800 disabled:text-slate-600 text-white font-semibold rounded-xl transition">High-Speed Analyse starten</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Progress with Cancel Button -->
+        <section id="ai-progress-section" class="hidden glass-panel rounded-2xl p-6 shadow-xl border border-indigo-500/30 space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 id="ai-status-title" class="font-semibold text-slate-200">Analysiere Audio...</h3>
+                <span id="ai-status-percent" class="text-sm font-bold text-indigo-400">0%</span>
+            </div>
+            <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div id="ai-progress-bar" class="bg-indigo-500 h-full w-0 transition-all duration-300"></div>
+            </div>
+            <div class="text-right pt-2">
+                <button onclick="cancelAIAnalysis()" class="px-3 py-1.5 bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 rounded-lg text-xs font-semibold transition border border-slate-700">
+                    <i class="fa-solid fa-xmark mr-1"></i> Analyse abbrechen
+                </button>
+            </div>
+        </section>
+
+        <!-- Section 3: Editor -->
+        <section id="editor-workspace" class="hidden glass-panel rounded-2xl p-6 shadow-xl space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-bold text-white">2. Erkannte Bibelverse & Merksätze</h2>
+                    <p class="text-xs text-slate-400">Nutze den Videoplayer zur Zeitkontrolle, ordne Bilder zu und wähle die Position/Ansicht.</p>
+                </div>
+                <button onclick="addManualVerse()" class="px-3 py-1.5 bg-slate-800 text-indigo-400 rounded-lg text-xs font-semibold border border-slate-700"><i class="fa-solid fa-plus"></i> Vers / Merksatz hinzufügen</button>
+            </div>
+
+            <!-- Video Preview Player for Timestamp checking -->
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                        <i class="fa-solid fa-play-circle text-indigo-400"></i> Predigtvideo Vorschau (für Zeitpunkte / Merksätze)
+                    </span>
+                    <span id="current-video-time" class="text-xs font-mono text-indigo-400">00:00</span>
+                </div>
+                <video id="preview-video" controls class="w-full rounded-lg max-h-[340px] bg-black border border-slate-800" ontimeupdate="updateVideoTimeDisplay(this)"></video>
+            </div>
+
+            <div id="verse-list" class="space-y-4"></div>
+
+            <button onclick="renderFinalVideos()" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg transition">
+                <i class="fa-solid fa-scissors"></i> Videos jetzt schneiden & rendern
+            </button>
+        </section>
+
+        <!-- Section 4: Downloads & Render Progress -->
+        <section id="download-section" class="hidden glass-panel rounded-2xl p-8 shadow-xl text-center space-y-6">
+            <div id="rendering-spinner" class="py-8 space-y-4">
+                <div class="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <div class="flex items-center justify-between max-w-md mx-auto">
+                    <h3 id="render-status-title" class="text-base font-bold text-slate-200">Rendere Videos...</h3>
+                    <span id="render-status-percent" class="text-sm font-bold text-indigo-400">0%</span>
+                </div>
+                <div class="max-w-md mx-auto bg-slate-800 rounded-full h-2.5 overflow-hidden mt-2">
+                    <div id="render-progress-bar" class="bg-indigo-500 h-full w-0 transition-all duration-300"></div>
+                </div>
+                <div class="pt-4">
+                    <button onclick="cancelAIAnalysis()" class="px-3 py-1.5 bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-400 rounded-lg text-xs font-semibold transition border border-slate-700">
+                        <i class="fa-solid fa-xmark mr-1"></i> Rendern abbrechen
+                    </button>
+                </div>
+            </div>
+
+            <div id="completed-downloads" class="hidden space-y-6">
+                <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-2xl border border-emerald-500/30"><i class="fa-solid fa-check"></i></div>
+                <h3 class="text-2xl font-bold text-white">Schnitt erfolgreich beendet!</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto pt-4">
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 text-left flex flex-col justify-between space-y-4">
+                        <h4 class="font-bold text-slate-200">Querformat (16:9 Langversion mit Folien/Vollbild)</h4>
+                        <a id="download-btn-16-9" download class="py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold text-center"><i class="fa-solid fa-download"></i> Herunterladen</a>
+                    </div>
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 text-left flex flex-col justify-between space-y-4">
+                        <h4 class="font-bold text-slate-200">Social Media Short (9:16 ohne Untertitel)</h4>
+                        <a id="download-btn-9-16" download class="py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold text-center"><i class="fa-solid fa-download"></i> Herunterladen</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        const SID = "session_" + Math.random().toString(36).substring(2, 9);
+        let uploadedVideoFile = null, introFilename = "", outroFilename = "", versesData = [];
+        let currentJid = null;
+        let activeInterval = null;
+
+        function formatTime(s) {
+            const sec = parseFloat(s) || 0;
+            return `${Math.floor(sec/60).toString().padStart(2,'0')}:${Math.floor(sec%60).toString().padStart(2,'0')}`;
+        }
+        function parseTime(str) {
+            if (!str) return 0;
+            const p = str.split(':').map(Number);
+            return p.length === 2 ? p[0]*60 + p[1] : parseFloat(str)||0;
+        }
+
+        function updateVideoTimeDisplay(videoEl) {
+            const mins = Math.floor(videoEl.currentTime / 60);
+            const secs = Math.floor(videoEl.currentTime % 60);
+            document.getElementById('current-video-time').innerText = `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+        }
+
+        async function uploadFileStream(file, name) {
+            await fetch(`/upload/${SID}/${encodeURIComponent(name)}`, { method: 'PUT', body: file });
+        }
+
+        function handleVideoSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                uploadedVideoFile = file;
+                document.getElementById('dropzone-prompt').classList.add('hidden');
+                document.getElementById('selected-video-info').classList.remove('hidden');
+                document.getElementById('video-filename').innerText = file.name;
+                document.getElementById('start-analysis-btn').disabled = false;
+            }
+        }
+        function removeVideo() {
+            uploadedVideoFile = null;
+            document.getElementById('video-input').value = '';
+            document.getElementById('dropzone-prompt').classList.remove('hidden');
+            document.getElementById('selected-video-info').classList.add('hidden');
+            document.getElementById('start-analysis-btn').disabled = true;
+        }
+
+        async function handleIntroSelect(event) {
+            const file = event.target.files[0];
+            if(file) {
+                introFilename = "intro" + file.name.substring(file.name.lastIndexOf('.'));
+                document.getElementById('intro-label').innerText = file.name;
+                await uploadFileStream(file, introFilename);
+            }
+        }
+        async function handleOutroSelect(event) {
+            const file = event.target.files[0];
+            if(file) {
+                outroFilename = "outro" + file.name.substring(file.name.lastIndexOf('.'));
+                document.getElementById('outro-label').innerText = file.name;
+                await uploadFileStream(file, outroFilename);
+            }
+        }
+
+        function cancelAIAnalysis() {
+            if (confirm("Möchtest du den Vorgang wirklich abbrechen?")) {
+                if (currentJid) {
+                    fetch(`/cancel/${currentJid}`).catch(e => {});
+                }
+                if (activeInterval) {
+                    clearInterval(activeInterval);
+                }
+                document.getElementById('ai-progress-section').classList.add('hidden');
+                document.getElementById('download-section').classList.add('hidden');
+                document.getElementById('start-analysis-btn').disabled = false;
+            }
+        }
+
+        async function startAIAnalysis() {
+            if (!uploadedVideoFile) return;
+            document.getElementById('ai-progress-section').classList.remove('hidden');
+            document.getElementById('ai-progress-section').scrollIntoView({ behavior: 'smooth' });
+
+            const ext = uploadedVideoFile.name.substring(uploadedVideoFile.name.lastIndexOf('.'));
+            await uploadFileStream(uploadedVideoFile, "video" + ext);
+
+            const promptText = document.getElementById('ai-prompt-input').value.trim();
+            currentJid = SID + "a";
+            await fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sid: SID, jid: currentJid, model: "base", prompt: promptText })
+            });
+
+            activeInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/status/${currentJid}`);
+                    const data = await res.json();
+                    document.getElementById('ai-status-title').innerText = data.msg || "Analysiere...";
+                    const pct = Math.round(data.pct || 0);
+                    document.getElementById('ai-progress-bar').style.width = pct + '%';
+                    document.getElementById('ai-status-percent').innerText = pct + '%';
+
+                    if (data.state === 'done') {
+                        clearInterval(activeInterval);
+                        document.getElementById('ai-progress-section').classList.add('hidden');
+                        
+                        document.getElementById('preview-video').src = `/video/${SID}`;
+
+                        versesData = (data.refs || []).map((r, i) => ({
+                            id: i+1, verse: r.ref, quote: r.text || "", timeStart: formatTime(r.t), duration: 8, slideFile: "", side: "right"
+                        }));
+                        if (versesData.length === 0) {
+                            versesData.push({ id: 1, verse: "Predigt-Einstieg", quote: "", timeStart: "01:00", duration: 8, slideFile: "", side: "right" });
+                        }
+                        renderVerseEditor();
+                        document.getElementById('editor-workspace').classList.remove('hidden');
+                        document.getElementById('editor-workspace').scrollIntoView({ behavior: 'smooth' });
+                    } else if (data.state === 'error' || data.state === 'cancelled') {
+                        clearInterval(activeInterval);
+                        document.getElementById('ai-progress-section').classList.add('hidden');
+                        if (data.state === 'error') alert("Fehler: " + data.msg);
+                    }
+                } catch(e) {}
+            }, 1000);
+        }
+
+        function renderVerseEditor() {
+            const container = document.getElementById('verse-list');
+            container.innerHTML = '';
+
+            versesData.forEach((item, index) => {
+                container.innerHTML += `
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="w-6 h-6 rounded-full bg-indigo-600/20 text-indigo-400 text-xs font-bold flex items-center justify-center">${index + 1}</span>
+                                <input type="text" value="${item.verse}" onchange="versesData[${index}].verse=this.value" class="bg-slate-800 border border-slate-700 rounded px-2.5 py-1 text-sm text-white" placeholder="Vers oder Merksatz">
+                            </div>
+                            <div class="flex items-center gap-2 text-xs">
+                                <span>Zeit:</span>
+                                <input type="text" value="${item.timeStart}" onchange="versesData[${index}].timeStart=this.value" class="w-16 bg-slate-800 border border-slate-700 rounded px-2 py-0.5 text-center text-slate-200">
+                                <span>Dauer (s):</span>
+                                <input type="number" value="${item.duration}" onchange="versesData[${index}].duration=parseFloat(this.value)||8" class="w-12 bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-center text-slate-200">
+                                <button onclick="removeVerse(${item.id})" class="text-slate-500 hover:text-red-400 ml-2"><i class="fa-solid fa-trash-can"></i></button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center pt-1">
+                            <div class="border border-dashed border-slate-700 rounded-lg p-2.5 bg-slate-950/40 hover:bg-slate-800/40 cursor-pointer text-center flex items-center justify-center gap-2"
+                                 onclick="document.getElementById('slide-input-${item.id}').click()">
+                                <i class="fa-regular fa-image text-indigo-400 text-sm"></i>
+                                <span id="slide-label-${item.id}" class="text-xs text-slate-300">${item.slideFile ? item.slideFile : 'Folie / Bild zuweisen'}</span>
+                                <input type="file" id="slide-input-${item.id}" accept="image/*" class="hidden" onchange="handleSlideSelect(event, ${index})">
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs gap-2">
+                                <span class="text-slate-400">Ansicht im Video:</span>
+                                <select onchange="versesData[${index}].side=this.value" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-slate-200 focus:outline-none">
+                                    <option value="right" ${item.side === 'right' ? 'selected' : ''}>Rechts vom Redner (Split-Screen)</option>
+                                    <option value="left" ${item.side === 'left' ? 'selected' : ''}>Links vom Redner (Split-Screen)</option>
+                                    <option value="fullscreen" ${item.side === 'fullscreen' ? 'selected' : ''}>Vollbild (Folie / Vers)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        async function handleSlideSelect(event, index) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const filename = `folie_${index}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            versesData[index].slideFile = filename;
+            document.getElementById(`slide-label-${versesData[index].id}`).innerText = file.name;
+            await uploadFileStream(file, filename);
+        }
+
+        function addManualVerse() {
+            versesData.push({ id: versesData.length + 1, verse: "Neuer Merksatz / Vers", quote: "", timeStart: "00:00", duration: 8, slideFile: "", side: "right" });
+            renderVerseEditor();
+        }
+
+        function removeVerse(id) {
+            versesData = versesData.filter(v => v.id !== id);
+            renderVerseEditor();
+        }
+
+        async function renderFinalVideos() {
+            document.getElementById('download-section').classList.remove('hidden');
+            document.getElementById('rendering-spinner').classList.remove('hidden');
+            document.getElementById('completed-downloads').classList.add('hidden');
+            document.getElementById('download-section').scrollIntoView({ behavior: 'smooth' });
+
+            const items = versesData.map(v => ({
+                t: parseTime(v.timeStart),
+                d: v.duration,
+                file: v.slideFile || "",
+                side: v.side || "right"
+            }));
+
+            currentJid = SID + "p";
+            const payload = {
+                sid: SID,
+                jid: currentJid,
+                name: "Predigt_Schnitt",
+                items: items
+            };
+
+            await fetch('/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            activeInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/status/${currentJid}`);
+                    const data = await res.json();
+                    document.getElementById('render-status-title').innerText = data.msg || "Rendere...";
+                    const pct = Math.round(data.pct || 0);
+                    document.getElementById('render-progress-bar').style.width = pct + '%';
+                    document.getElementById('render-status-percent').innerText = pct + '%';
+
+                    if (data.state === 'done') {
+                        clearInterval(activeInterval);
+                        document.getElementById('rendering-spinner').classList.add('hidden');
+                        document.getElementById('completed-downloads').classList.remove('hidden');
+                        document.getElementById('download-btn-16-9').href = `/fertig/${data.files[0]}`;
+                        document.getElementById('download-btn-9-16').href = `/fertig/${data.files[1]}`;
+                    } else if (data.state === 'error' || data.state === 'cancelled') {
+                        clearInterval(activeInterval);
+                        document.getElementById('download-section').classList.add('hidden');
+                        if (data.state === 'error') alert("Fehler beim Rendern: " + data.msg);
+                    }
+                } catch(e) {}
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
