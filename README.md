@@ -69,6 +69,10 @@ A local, AI-assisted tool for editing sermon recordings. Speech recognition, Bib
 
 ---
 
-## License
+## License & Third-Party Notices
 
-Distributed under the MIT License. See `THIRD_PARTY_NOTICES.md` for third-party component licenses.
+This project is licensed under the **MIT License** – see the `LICENSE.md` file for details.
+
+### Third-Party Software
+PreachCut integrates several open-source libraries (such as FFmpeg via `imageio-ffmpeg`, `faster-whisper`, and OpenCV). Users are responsible for complying with the respective licenses of these third-party tools when using or building offline packages. See `THIRD_PARTY_NOTICES.md` for third-party component licenses.
+
