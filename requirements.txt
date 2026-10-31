@@ -1,5 +1,5 @@
 faster-whisper
-av==16.1.0
+av
 imageio-ffmpeg
 gpt4all==2.8.2
 opencv-python-headless==4.13.0.92
