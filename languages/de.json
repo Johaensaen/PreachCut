@@ -1,0 +1,30 @@
+{
+  "language_code": "de",
+  "whisper_language": "de",
+  "hint": "Predigt mit Bibelstellen: 1. Mose 1, Psalm 23, Jesaja 53, Matthäus 5, Johannes 3,16, Römer 8,28, Offenbarung.",
+  "single_books": {
+    "genesis": "Genesis", "exodus": "Exodus", "levitikus": "Levitikus", "numeri": "Numeri", "deuteronomium": "Deuteronomium",
+    "josua": "Josua", "richter": "Richter", "rut": "Rut", "esra": "Esra", "nehemia": "Nehemia", "ester": "Ester", "hiob": "Hiob",
+    "psalm": "Psalm", "psalmen": "Psalm", "ps": "Psalm", "sprüche": "Sprüche", "prediger": "Prediger", "hohelied": "Hohelied",
+    "jesaja": "Jesaja", "jeremia": "Jeremia", "klagelieder": "Klagelieder", "hesekiel": "Hesekiel", "daniel": "Daniel",
+    "hosea": "Hosea", "joel": "Joel", "amos": "Amos", "obadja": "Obadja", "jona": "Jona", "micha": "Micha", "nahum": "Nahum",
+    "habakuk": "Habakuk", "zefanja": "Zefanja", "haggai": "Haggai", "sacharja": "Sacharja", "maleachi": "Maleachi",
+    "matthäus": "Matthäus", "markus": "Markus", "lukas": "Lukas", "johannes": "Johannes", "apostelgeschichte": "Apostelgeschichte",
+    "römer": "Römer", "galater": "Galater", "epheser": "Epheser", "philipper": "Philipper", "kolosser": "Kolosser",
+    "titus": "Titus", "philemon": "Philemon", "hebräer": "Hebräer", "jakobus": "Jakobus", "judas": "Judas", "offenbarung": "Offenbarung"
+  },
+  "numbered_books": {
+    "mose": "Mose", "samuel": "Samuel", "könige": "Könige", "chronik": "Chronik", 
+    "korinther": "Korinther", "thessalonicher": "Thessalonicher", "timotheus": "Timotheus", "petrus": "Petrus", "johannes": "Johannes"
+  },
+  "ordinals": {
+    "erste": 1, "zweite": 2, "dritte": 3, "vierte": 4, "fünfte": 5
+  },
+  "units": {
+    "eins": 1, "zwei": 2, "drei": 3, "vier": 4, "fünf": 5, "sechs": 6, "sieben": 7, "acht": 8, "neun": 9, "zehn": 10,
+    "elf": 11, "zwölf": 12, "dreizehn": 13, "vierzehn": 14, "fünfzehn": 15, "sechzehn": 16, "siebzehn": 17, "achtzehn": 18, "neunzehn": 19
+  },
+  "tens": {
+    "zwanzig": 20, "dreißig": 30, "dreissig": 30, "vierzig": 40, "fünfzig": 50, "sechzig": 60, "siebzig": 70, "achtzig": 80, "neunzig": 90
+  }
+}

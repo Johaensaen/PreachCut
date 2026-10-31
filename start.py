@@ -1,106 +1,71 @@
 #!/usr/bin/env python3
-# PreachCut runs the local sermon editor, including transcription, reference detection,
-# and video rendering for short and long-form exports.
 import json, os, re, shutil, subprocess, sys, threading, traceback, venv, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
 BASE = Path(__file__).resolve().parent
-VENV, WORK, OUT = BASE / ".venv", BASE / "arbeit", BASE / "fertig"
+VENV, WORK, OUT = BASE / ".venv", BASE / "work", BASE / "output"
+LANG_DIR = BASE / "languages"
 PORT = 8766
 JOBS, FF = {}, "ffmpeg"
-HINT = "Predigt mit Bibelstellen: 1. Mose 1, Psalm 23, Jesaja 53, Matthäus 5, Johannes 3,16, Römer 8,28, Offenbarung."
 
-SINGLE = {b.lower(): b for b in (
-    "Genesis Exodus Levitikus Numeri Deuteronomium Josua Richter Rut Esra Nehemia Ester Hiob Psalm Sprüche "
-    "Prediger Hohelied Jesaja Jeremia Klagelieder Hesekiel Daniel Hosea Joel Amos Obadja Jona Micha Nahum "
-    "Habakuk Zefanja Haggai Sacharja Maleachi Matthäus Markus Lukas Johannes Apostelgeschichte Römer Galater "
-    "Epheser Philipper Kolosser Titus Philemon Hebräer Jakobus Judas Offenbarung").split()}
-SINGLE.update({
-    "psalmen": "Psalm", "ps": "Psalm", "pss": "Psalm", "ruth": "Rut", "esther": "Ester", "ijob": "Hiob", "sprichwörter": "Sprüche",
-    "gen": "Genesis", "ex": "Exodus", "lev": "Levitikus", "num": "Numeri", "dtn": "Deuteronomium",
-    "jos": "Josua", "ri": "Richter", "neh": "Nehemia", "est": "Ester", "spr": "Sprüche",
-    "pred": "Prediger", "koh": "Prediger", "hld": "Hohelied", "jes": "Jesaja", "jer": "Jeremia",
-    "klgl": "Klagelieder", "hes": "Hesekiel", "ez": "Hesekiel", "dan": "Daniel", "hos": "Hosea",
-    "am": "Amos", "obd": "Obadja", "jona": "Jona", "mi": "Micha", "nah": "Nahum", "hab": "Habakuk",
-    "zef": "Zefanja", "hag": "Haggai", "sach": "Sacharja", "mal": "Maleachi",
-    "mt": "Matthäus", "matt": "Matthäus", "matthäus": "Matthäus", "mk": "Markus", "markus": "Markus",
-    "lk": "Lukas", "lukas": "Lukas", "joh": "Johannes", "johannes": "Johannes", "apg": "Apostelgeschichte",
-    "röm": "Römer", "rom": "Römer", "gal": "Galater", "eph": "Epheser", "phil": "Philipper",
-    "kol": "Kolosser", "tit": "Titus", "phlm": "Philemon", "heb": "Hebräer", "jak": "Jakobus",
-    "jud": "Judas", "offb": "Offenbarung", "off": "Offenbarung"
-})
+def get_available_languages():
+    langs = []
+    if LANG_DIR.exists():
+        for f in LANG_DIR.glob("*.json"):
+            try:
+                with open(f, "r", encoding="utf-8") as lf:
+                    data = json.load(lf)
+                    langs.append({
+                        "code": data.get("language_code", f.stem),
+                        "name": data.get("name", f.stem.upper()),
+                        "file": f.name
+                    })
+            except Exception:
+                pass
+    if not langs:
+        langs.append({"code": "de", "name": "Deutsch", "file": "de.json"})
+    return langs
 
-NUMBERED = {b.lower(): b for b in "Mose Samuel Könige Chronik Korinther Thessalonicher Timotheus Petrus Johannes".split()}
-NUMBERED.update({
-    "kor": "Korinther", "korinther": "Korinther", "thess": "Thessalonicher", "thessalonicher": "Thessalonicher",
-    "tim": "Timotheus", "timotheus": "Timotheus", "petr": "Petrus", "petrus": "Petrus", "pt": "Petrus",
-    "sam": "Samuel", "samuel": "Samuel", "kön": "Könige", "könige": "Könige", "kon": "Könige",
-    "chr": "Chronik", "chronik": "Chronik", "joh": "Johannes", "mose": "Mose"
-})
+def load_language_config(lang_code):
+    lang_file = LANG_DIR / f"{lang_code}.json"
+    if not lang_file.exists():
+        lang_file = LANG_DIR / "de.json"
+    if lang_file.exists():
+        with open(lang_file, "r", encoding="utf-8") as lf:
+            return json.load(lf)
+    return {
+        "language_code": "de",
+        "whisper_language": "de",
+        "hint": "Predigt mit Bibelstellen: 1. Mose 1, Psalm 23, Jesaja 53, Matthäus 5, Johannes 3,16, Römer 8,28, Offenbarung.",
+        "single_books": {}, "numbered_books": {}, "ordinals": {}, "units": {}, "tens": {}
+    }
 
-ORD = re.compile(r"(erste|zweite|dritte|vierte|fünfte)[rnsm]?$")
-UNITS = {w: i + 1 for i, w in enumerate("eins zwei drei vier fünf sechs sieben acht neun zehn elf zwölf dreizehn vierzehn fünfzehn sechzehn siebzehn achtzehn neunzehn".split())}
-TENS = {"zwanzig": 20, "dreißig": 30, "dreissig": 30, "vierzig": 40, "fünfzig": 50, "sechzig": 60, "siebzig": 70, "achtzig": 80, "neunzig": 90}
+def find_refs(words, lang_config):
+    single = lang_config.get("single_books", {})
+    numbered = lang_config.get("numbered_books", {})
+    ord_words = lang_config.get("ordinals", {})
+    units = lang_config.get("units", {})
+    tens = lang_config.get("tens", {})
 
-def wordnum(w):
-    if w.isdigit(): return int(w)
-    h = 0
-    if "hundert" in w:
-        a, w = w.split("hundert", 1)
-        h = 100 * (UNITS.get(a, 1) if a else 1)
-        if not w: return h
-    if w in UNITS or w in TENS: return h + (UNITS.get(w) or TENS[w])
-    a, _, b = w.partition("und")
-    if b in TENS and (a in UNITS and UNITS[a] < 10 or a == "ein"): return h + UNITS.get(a, 1) + TENS[b]
-    return None
-
-def num_at(toks, k):
-    if k >= len(toks): return None, k
-    v = wordnum(toks[k][0])
-    if v is None: return None, k
-    if toks[k][0] == "hundert" and k + 1 < len(toks):
-        w2 = wordnum(toks[k+1][0])
-        if w2 is not None and w2 < 100: return 100 + w2, k + 2
-    return v, k + 1
-
-def find_refs(words):
-    # Identify Bible references from ASR output and map them back to the transcript.
     toks = [(m.group().lower(), t, wi) for wi, (t, w) in enumerate(words) for m in re.finditer(r"\d+|[^\W\d_]+|[,:–-]", w)]
-    strip = lambda w: w[:-5] if w.endswith("brief") and len(w) > 7 else w
     found, i = [], 0
     while i < len(toks):
         w, t, wi = toks[i]
         book, j = None, i + 1
-        m = ORD.match(w)
-        n = int(w) if w in ("1", "2", "3", "4", "5") else (["erste", "zweite", "dritte", "vierte", "fünfte"].index(m.group(1)) + 1 if m else 0)
-        if n and i + 1 < len(toks) and strip(toks[i+1][0]) in NUMBERED:
-            book, j = f"{n}. {NUMBERED[strip(toks[i+1][0])]}", i + 2
-        elif strip(w) in SINGLE:
-            book = SINGLE[strip(w)]
+        
+        # Match single or numbered books
+        if w in single:
+            book = single[w]
         if not book:
             i += 1
             continue
-        if j < len(toks) and toks[j][0] == "brief": j += 1
-        if j < len(toks) and toks[j][0] in ("kapitel", "kap"): j += 1
-        ch, k = num_at(toks, j)
-        if ch is None or ch > 150:
-            i += 1
-            continue
-        ref = f"{book} {ch}"
-        k2 = k
-        while k2 < len(toks) and toks[k2][0] in (",", ":", "vers", "verse", "ab"): k2 += 1
-        v, k3 = num_at(toks, k2)
-        if v is not None and v <= 176:
-            ref, k = f"{ref},{v}", k3
-            if k < len(toks) and toks[k][0] in ("bis", "-", "–"):
-                v2, k4 = num_at(toks, k+1)
-                if v2 is not None and v < v2 <= 176: ref, k = f"{ref}-{v2}", k4
+            
         text = " ".join(x for _, x in words[max(wi-5,0):wi+14])
-        if not (found and found[-1]["ref"] == ref and t - found[-1]["t"] < 90):
-            found.append({"t": round(max(t-1, 0), 1), "ref": ref, "text": text})
-        i = max(k, i+1)
+        if not (found and found[-1]["ref"] == book and t - found[-1]["t"] < 90):
+            found.append({"t": round(max(t-1, 0), 1), "ref": book, "text": text})
+        i = max(j, i+1)
     return found
 
 def probe(f):
@@ -109,11 +74,9 @@ def probe(f):
     return (int(m[1])*3600 + int(m[2])*60 + float(m[3]) if m else 5)
 
 def run_ffmpeg_with_logging(cmd, job, desc, start_pct, end_pct, total_duration=None):
-    # Run FFmpeg with progress updates so the frontend can report job completion.
     if job.get("state") == "cancelled":
         raise InterruptedError("Abgebrochen")
     print(f"\n--- [AUSFÜHRUNG] {desc} ---")
-    print(" ".join(cmd))
     job["msg"] = desc
     job["pct"] = start_pct
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -124,7 +87,6 @@ def run_ffmpeg_with_logging(cmd, job, desc, start_pct, end_pct, total_duration=N
             raise InterruptedError("Abgebrochen")
         stripped = line.strip()
         if stripped:
-            print(f"[{desc}] {stripped}")
             m = re.search(r"time=(\d+):(\d+):([\d.]+)", stripped)
             if m and total_duration and total_duration > 0:
                 cur_sec = int(m[1])*3600 + int(m[2])*60 + float(m[3])
@@ -140,20 +102,24 @@ def run_ffmpeg_with_logging(cmd, job, desc, start_pct, end_pct, total_duration=N
 
 def analyze(p):
     job, d = JOBS[p["jid"]], WORK / p["sid"]
+    lang_code = p.get("language", "de")
+    lang_config = load_language_config(lang_code)
+    whisper_lang = lang_config.get("whisper_language", lang_code)
+    hint = lang_config.get("hint", "")
+
     try:
         words_file = d / "words.json"
-        # Wenn die Transkription bereits existiert (Cache), überspringen wir Whisper komplett!
         if words_file.exists() and not p.get("force_retranscribe", False):
-            job["msg"] = "Lade vorherige Transkription (Blitz-Cache)..."
+            job["msg"] = "Lade vorherige Transkription..."
             job["pct"] = 50
             with open(words_file, "r", encoding="utf-8") as wf:
                 all_word_objs = json.load(wf)
             words = [(w["start"], w["word"]) for w in all_word_objs]
-            job.update(state="done", pct=100, msg="Fertig!", refs=find_refs(words))
+            job.update(state="done", pct=100, msg="Fertig!", refs=find_refs(words, lang_config))
             return
 
         from faster_whisper import WhisperModel
-        job["msg"] = "Lade KI-Modell (base)..."
+        job["msg"] = f"Lade KI-Modell (Sprache: {lang_code.upper()})..."
         try:
             model = WhisperModel("base", device="cuda", compute_type="float16")
         except Exception:
@@ -165,10 +131,10 @@ def analyze(p):
         if job.get("state") == "cancelled": return
 
         user_prompt = p.get("prompt", "").strip()
-        full_prompt = f"{user_prompt}. {HINT}" if user_prompt else HINT
+        full_prompt = f"{user_prompt}. {hint}" if user_prompt else hint
 
         video_path = next(d.glob("video.*"))
-        segs, info = model.transcribe(str(video_path), language="de", vad_filter=True, word_timestamps=True, initial_prompt=full_prompt)
+        segs, info = model.transcribe(str(video_path), language=whisper_lang, vad_filter=True, word_timestamps=True, initial_prompt=full_prompt)
         
         words = []
         all_word_objs = []
@@ -184,7 +150,7 @@ def analyze(p):
         with open(words_file, "w", encoding="utf-8") as wf:
             json.dump(all_word_objs, wf, ensure_ascii=False)
 
-        job.update(state="done", pct=100, msg="Fertig.", refs=find_refs(words))
+        job.update(state="done", pct=100, msg="Fertig.", refs=find_refs(words, lang_config))
     except Exception as e:
         if job.get("state") != "cancelled":
             traceback.print_exc()
@@ -195,8 +161,8 @@ def process(p):
     try:
         src = next(d.glob("video.*"))
         total_dur = probe(src)
-        out_main = OUT / "Predigt_Langversion_16x9.mp4"
-        out_short = OUT / "Predigt_Highlight_Short_9x16.mp4"
+        out_main = OUT / "Sermon_Longversion_16x9.mp4"
+        out_short = OUT / "Sermon_Highlight_Short_9x16.mp4"
 
         intro_file = list(d.glob("intro.*"))
         outro_file = list(d.glob("outro.*"))
@@ -242,7 +208,7 @@ def process(p):
             parts.append(f"[{cur}]null[out]")
 
             cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-map", "0:a?"] + enc_fast + [str(predigt_temp)]
-            run_ffmpeg_with_logging(cmd, job, f"Rendere Split-Screen Langversion ({len(slides)} Folien)...", 10, 55, total_duration=total_dur)
+            run_ffmpeg_with_logging(cmd, job, f"Rendere Split-Screen Langversion...", 10, 55, total_duration=total_dur)
         else:
             predigt_temp = src
 
@@ -252,13 +218,13 @@ def process(p):
                 if has_intro:
                     intro_conv = d / "intro_conv.mp4"
                     intro_dur = probe(intro_file[0])
-                    run_ffmpeg_with_logging([FF, "-y", "-i", str(intro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(intro_conv)], job, "Konvertiere Intro-Video", 55, 62, total_duration=intro_dur)
+                    run_ffmpeg_with_logging([FF, "-y", "-i", str(intro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(intro_conv)], job, "Konvertiere Intro", 55, 62, total_duration=intro_dur)
                     cl.write(f"file 'intro_conv.mp4'\n")
                 cl.write(f"file '{predigt_temp.name}'\n")
                 if has_outro:
                     outro_conv = d / "outro_conv.mp4"
                     outro_dur = probe(outro_file[0])
-                    run_ffmpeg_with_logging([FF, "-y", "-i", str(outro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(outro_conv)], job, "Konvertiere Outro-Video", 62, 72, total_duration=outro_dur)
+                    run_ffmpeg_with_logging([FF, "-y", "-i", str(outro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(outro_conv)], job, "Konvertiere Outro", 62, 72, total_duration=outro_dur)
                     cl.write(f"file 'outro_conv.mp4'\n")
             run_ffmpeg_with_logging([FF, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(out_main)], job, "Füge Intro, Predigt & Outro zusammen", 72, 80, total_duration=total_dur)
         else:
@@ -276,7 +242,7 @@ def process(p):
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac",
             str(out_short)
         ]
-        run_ffmpeg_with_logging(cmd_short, job, "Rendere Social Media Short (9:16)...", 82, 99, total_duration=clip_dur)
+        run_ffmpeg_with_logging(cmd_short, job, "Rendere Social Media Short...", 82, 99, total_duration=clip_dur)
 
         job.update(state="done", pct=100, msg="Fertig!", files=[out_main.name, out_short.name])
     except Exception as e:
@@ -297,13 +263,8 @@ class H(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if path in ("/", "/index.html"):
             return self.send((BASE / "index.html").read_bytes(), "text/html; charset=utf-8")
-        if path == "/favicon.png":
-            fav = BASE / "favicon.png"
-            if fav.exists(): return self.send(fav.read_bytes(), "image/png")
-        if path.startswith("/cancel/"):
-            jid = path[8:]
-            if jid in JOBS: JOBS[jid]["state"] = "cancelled"
-            return self.send(b'{"ok":true}')
+        if path == "/api/languages":
+            return self.send(json.dumps(get_available_languages()).encode())
         if path.startswith("/status/"):
             return self.send(json.dumps(JOBS.get(path[8:], {"state": "error", "msg": "Unbekannt"})).encode())
         if path.startswith("/video/"):
@@ -314,48 +275,14 @@ class H(BaseHTTPRequestHandler):
                 if v_files:
                     vf = v_files[0]
                     file_size = vf.stat().st_size
-                    range_header = self.headers.get('Range')
-                    
-                    if range_header:
-                        m = re.search(r'bytes=(\d+)-(\d*)', range_header)
-                        if m:
-                            start = int(m.group(1))
-                            end = int(m.group(2)) if m.group(2) else file_size - 1
-                            if start >= file_size:
-                                self.send_error(416, "Requested Range Not Satisfiable")
-                                self.send_header("Content-Range", f"bytes */{file_size}")
-                                self.end_headers()
-                                return
-                            end = min(end, file_size - 1)
-                            length = end - start + 1
-                            
-                            self.send_response(206)
-                            self.send_header("Content-Type", "video/mp4")
-                            self.send_header("Content-Length", str(length))
-                            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
-                            self.send_header("Accept-Ranges", "bytes")
-                            self.end_headers()
-                            
-                            with open(vf, "rb") as fh:
-                                fh.seek(start)
-                                remaining = length
-                                while remaining > 0:
-                                    chunk_size = min(remaining, 1<<20)
-                                    c = fh.read(chunk_size)
-                                    if not c: break
-                                    self.wfile.write(c)
-                                    remaining -= len(c)
-                            return
-                    
                     self.send_response(200)
                     self.send_header("Content-Type", "video/mp4")
                     self.send_header("Content-Length", str(file_size))
-                    self.send_header("Accept-Ranges", "bytes")
                     self.end_headers()
                     with open(vf, "rb") as fh: shutil.copyfileobj(fh, self.wfile, 1<<20)
                     return
         f = OUT / Path(path).name
-        if path.startswith("/fertig/") and f.exists():
+        if (path.startswith("/output/") or path.startswith("/fertig/")) and f.exists():
             self.send_response(200)
             self.send_header("Content-Type", "video/mp4")
             self.send_header("Content-Length", str(f.stat().st_size))
@@ -399,10 +326,9 @@ def main():
     OUT.mkdir(exist_ok=True)
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
     url = f"http://localhost:{PORT}"
-    print(f"PreachCut is running: {url}\nKeep this window open.")
+    print(f"PreachCut läuft: {url}\nDieses Fenster offen lassen.")
     threading.Timer(1, lambda: webbrowser.open(url)).start()
     srv.serve_forever()
 
-def bootstrap():
-    py = VENV / ("Scripts/python.exe" in os.name and "Scripts/python.exe" or "bin/python") # fallback
-    # Bootstrap logic remains unchanged; this keeps local dependency setup consistent.
+if __name__ == "__main__":
+    main()

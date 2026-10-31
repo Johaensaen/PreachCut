@@ -1,0 +1,60 @@
+{
+  "language_code": "en",
+  "whisper_language": "en",
+  "hint": "Sermon with Bible references: Genesis 1, Psalm 23, Isaiah 53, Matthew 5, John 3:16, Romans 8:28, Revelation.",
+  "single_books": {
+    "genesis": "Genesis",
+    "exodus": "Exodus",
+    "matthew": "Matthew",
+    "mark": "Mark",
+    "luke": "Luke",
+    "john": "John",
+    "revelation": "Revelation"
+  },
+  "numbered_books": {
+    "samuel": "Samuel",
+    "kings": "Kings",
+    "chronicles": "Chronicles",
+    "corinthians": "Corinthians",
+    "timothy": "Timothy",
+    "peter": "Peter"
+  },
+  "ordinals": {
+    "first": 1,
+    "second": 2,
+    "third": 3,
+    "fourth": 4,
+    "fifth": 5
+  },
+  "units": {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19
+  },
+  "tens": {
+    "twenty": 20,
+    "thirty": 30,
+    "forty": 40,
+    "fifty": 50,
+    "sixty": 60,
+    "seventy": 70,
+    "eighty": 80,
+    "ninety": 90
+  }
+}
