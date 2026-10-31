@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# PreachCut runs the local sermon editor, including transcription, reference detection,
+# and video rendering for short and long-form exports.
 import json, os, re, shutil, subprocess, sys, threading, traceback, venv, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -64,6 +66,7 @@ def num_at(toks, k):
     return v, k + 1
 
 def find_refs(words):
+    # Identify Bible references from ASR output and map them back to the transcript.
     toks = [(m.group().lower(), t, wi) for wi, (t, w) in enumerate(words) for m in re.finditer(r"\d+|[^\W\d_]+|[,:–-]", w)]
     strip = lambda w: w[:-5] if w.endswith("brief") and len(w) > 7 else w
     found, i = [], 0
@@ -106,6 +109,7 @@ def probe(f):
     return (int(m[1])*3600 + int(m[2])*60 + float(m[3]) if m else 5)
 
 def run_ffmpeg_with_logging(cmd, job, desc, start_pct, end_pct, total_duration=None):
+    # Run FFmpeg with progress updates so the frontend can report job completion.
     if job.get("state") == "cancelled":
         raise InterruptedError("Abgebrochen")
     print(f"\n--- [AUSFÜHRUNG] {desc} ---")
@@ -395,10 +399,10 @@ def main():
     OUT.mkdir(exist_ok=True)
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
     url = f"http://localhost:{PORT}"
-    print(f"Predigt-Cutter läuft: {url}\nDieses Fenster offen lassen.")
+    print(f"PreachCut is running: {url}\nKeep this window open.")
     threading.Timer(1, lambda: webbrowser.open(url)).start()
     srv.serve_forever()
 
 def bootstrap():
     py = VENV / ("Scripts/python.exe" in os.name and "Scripts/python.exe" or "bin/python") # fallback
-    # ... bootstrap logic bleibt wie gehabt ...
+    # Bootstrap logic remains unchanged; this keeps local dependency setup consistent.
