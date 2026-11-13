@@ -23,7 +23,7 @@ if [ ! -d ".venv" ]; then
   if [ $? -ne 0 ]; then
     echo ""
     echo "ERROR: Package installation failed!"
-    echo "Removing broken environment. Please fix requirements.txt and try again."
+    echo "Removing broken environment. Please check requirements.txt and try again."
     rm -rf .venv
     read -n 1 -s -r -p "Press any key to exit..."
     exit 1

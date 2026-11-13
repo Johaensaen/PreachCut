@@ -44,24 +44,16 @@ def load_language_config(lang_code):
 
 def find_refs(words, lang_config):
     single = lang_config.get("single_books", {})
-    numbered = lang_config.get("numbered_books", {})
-    ord_words = lang_config.get("ordinals", {})
-    units = lang_config.get("units", {})
-    tens = lang_config.get("tens", {})
-
     toks = [(m.group().lower(), t, wi) for wi, (t, w) in enumerate(words) for m in re.finditer(r"\d+|[^\W\d_]+|[,:–-]", w)]
     found, i = [], 0
     while i < len(toks):
         w, t, wi = toks[i]
         book, j = None, i + 1
-        
-        # Match single or numbered books
         if w in single:
             book = single[w]
         if not book:
             i += 1
             continue
-            
         text = " ".join(x for _, x in words[max(wi-5,0):wi+14])
         if not (found and found[-1]["ref"] == book and t - found[-1]["t"] < 90):
             found.append({"t": round(max(t-1, 0), 1), "ref": book, "text": text})
@@ -76,7 +68,7 @@ def probe(f):
 def run_ffmpeg_with_logging(cmd, job, desc, start_pct, end_pct, total_duration=None):
     if job.get("state") == "cancelled":
         raise InterruptedError("Abgebrochen")
-    print(f"\n--- [AUSFÜHRUNG] {desc} ---")
+    print(f"\n--- [EXECUTION] {desc} ---")
     job["msg"] = desc
     job["pct"] = start_pct
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -97,7 +89,7 @@ def run_ffmpeg_with_logging(cmd, job, desc, start_pct, end_pct, total_duration=N
     if job.get("state") == "cancelled":
         raise InterruptedError("Abgebrochen")
     if ret != 0:
-        raise RuntimeError(f"{desc} fehlgeschlagen mit Code {ret}")
+        raise RuntimeError(f"{desc} failed with exit code {ret}")
     job["pct"] = end_pct
 
 def analyze(p):
@@ -110,16 +102,16 @@ def analyze(p):
     try:
         words_file = d / "words.json"
         if words_file.exists() and not p.get("force_retranscribe", False):
-            job["msg"] = "Lade vorherige Transkription..."
+            job["msg"] = "Loading previous transcription..."
             job["pct"] = 50
             with open(words_file, "r", encoding="utf-8") as wf:
                 all_word_objs = json.load(wf)
             words = [(w["start"], w["word"]) for w in all_word_objs]
-            job.update(state="done", pct=100, msg="Fertig!", refs=find_refs(words, lang_config))
+            job.update(state="done", pct=100, msg="Done!", refs=find_refs(words, lang_config))
             return
 
         from faster_whisper import WhisperModel
-        job["msg"] = f"Lade KI-Modell (Sprache: {lang_code.upper()})..."
+        job["msg"] = f"Loading AI model (Language: {lang_code.upper()})..."
         try:
             model = WhisperModel("base", device="cuda", compute_type="float16")
         except Exception:
@@ -145,12 +137,12 @@ def analyze(p):
                 words.append((w.start, w_text))
                 all_word_objs.append({"start": w.start, "end": w.end, "word": w_text})
             job["pct"] = min(99, round(100 * sg.end / max(info.duration, 1)))
-            job["msg"] = f"Erkenne Bibelstellen... {int(sg.end // 60)} / {int(info.duration // 60)} Min."
+            job["msg"] = f"Detecting references... {int(sg.end // 60)} / {int(info.duration // 60)} min."
             
         with open(words_file, "w", encoding="utf-8") as wf:
             json.dump(all_word_objs, wf, ensure_ascii=False)
 
-        job.update(state="done", pct=100, msg="Fertig.", refs=find_refs(words, lang_config))
+        job.update(state="done", pct=100, msg="Done.", refs=find_refs(words, lang_config))
     except Exception as e:
         if job.get("state") != "cancelled":
             traceback.print_exc()
@@ -168,7 +160,7 @@ def process(p):
         outro_file = list(d.glob("outro.*"))
         has_intro, has_outro = len(intro_file) > 0, len(outro_file) > 0
 
-        job["msg"] = "Starte Videoschnitt..."
+        job["msg"] = "Starting video rendering..."
         job["pct"] = 5
 
         items = p.get("items", [])
@@ -183,7 +175,7 @@ def process(p):
         fit_half = "scale=960:1080:force_original_aspect_ratio=decrease,pad=960:1080:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p"
         enc_fast = ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"]
 
-        predigt_temp = d / "temp_predigt.mp4"
+        predigt_temp = d / "temp_sermon.mp4"
 
         if slides:
             cmd = [FF, "-y", "-hide_banner", "-i", str(src)]
@@ -208,7 +200,7 @@ def process(p):
             parts.append(f"[{cur}]null[out]")
 
             cmd += ["-filter_complex", ";".join(parts), "-map", "[out]", "-map", "0:a?"] + enc_fast + [str(predigt_temp)]
-            run_ffmpeg_with_logging(cmd, job, f"Rendere Split-Screen Langversion...", 10, 55, total_duration=total_dur)
+            run_ffmpeg_with_logging(cmd, job, f"Rendering split-screen long version...", 10, 55, total_duration=total_dur)
         else:
             predigt_temp = src
 
@@ -218,15 +210,15 @@ def process(p):
                 if has_intro:
                     intro_conv = d / "intro_conv.mp4"
                     intro_dur = probe(intro_file[0])
-                    run_ffmpeg_with_logging([FF, "-y", "-i", str(intro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(intro_conv)], job, "Konvertiere Intro", 55, 62, total_duration=intro_dur)
+                    run_ffmpeg_with_logging([FF, "-y", "-i", str(intro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(intro_conv)], job, "Converting Intro", 55, 62, total_duration=intro_dur)
                     cl.write(f"file 'intro_conv.mp4'\n")
                 cl.write(f"file '{predigt_temp.name}'\n")
                 if has_outro:
                     outro_conv = d / "outro_conv.mp4"
                     outro_dur = probe(outro_file[0])
-                    run_ffmpeg_with_logging([FF, "-y", "-i", str(outro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(outro_conv)], job, "Konvertiere Outro", 62, 72, total_duration=outro_dur)
+                    run_ffmpeg_with_logging([FF, "-y", "-i", str(outro_file[0]), "-vf", fit_full, "-r", "25"] + enc_fast + [str(outro_conv)], job, "Converting Outro", 62, 72, total_duration=outro_dur)
                     cl.write(f"file 'outro_conv.mp4'\n")
-            run_ffmpeg_with_logging([FF, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(out_main)], job, "Füge Intro, Predigt & Outro zusammen", 72, 80, total_duration=total_dur)
+            run_ffmpeg_with_logging([FF, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list), "-c", "copy", str(out_main)], job, "Concatenating Intro, Sermon & Outro", 72, 80, total_duration=total_dur)
         else:
             if predigt_temp != out_main: shutil.copy(str(predigt_temp), str(out_main))
 
@@ -242,9 +234,9 @@ def process(p):
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac",
             str(out_short)
         ]
-        run_ffmpeg_with_logging(cmd_short, job, "Rendere Social Media Short...", 82, 99, total_duration=clip_dur)
+        run_ffmpeg_with_logging(cmd_short, job, "Rendering Social Media Short...", 82, 99, total_duration=clip_dur)
 
-        job.update(state="done", pct=100, msg="Fertig!", files=[out_main.name, out_short.name])
+        job.update(state="done", pct=100, msg="Done!", files=[out_main.name, out_short.name])
     except Exception as e:
         if job.get("state") != "cancelled":
             traceback.print_exc()
@@ -266,7 +258,7 @@ class H(BaseHTTPRequestHandler):
         if path == "/api/languages":
             return self.send(json.dumps(get_available_languages()).encode())
         if path.startswith("/status/"):
-            return self.send(json.dumps(JOBS.get(path[8:], {"state": "error", "msg": "Unbekannt"})).encode())
+            return self.send(json.dumps(JOBS.get(path[8:], {"state": "error", "msg": "Unknown"})).encode())
         if path.startswith("/video/"):
             sid_part = path[7:]
             d = WORK / sid_part
@@ -313,7 +305,7 @@ class H(BaseHTTPRequestHandler):
         auto = self.path == "/analyze"
         jid = p.get("jid") or (p["sid"] + ("a" if auto else ""))
         p["jid"] = jid
-        JOBS[jid] = {"state": "run", "pct": 0, "msg": "Startet...", "files": [], "refs": []}
+        JOBS[jid] = {"state": "run", "pct": 0, "msg": "Starting...", "files": [], "refs": []}
         threading.Thread(target=analyze if auto else process, args=(p,), daemon=True).start()
         self.send(b'{"ok":true}')
 
@@ -326,7 +318,7 @@ def main():
     OUT.mkdir(exist_ok=True)
     srv = ThreadingHTTPServer(("127.0.0.1", PORT), H)
     url = f"http://localhost:{PORT}"
-    print(f"PreachCut läuft: {url}\nDieses Fenster offen lassen.")
+    print(f"PreachCut running: {url}\nKeep this window open.")
     threading.Timer(1, lambda: webbrowser.open(url)).start()
     srv.serve_forever()
 
